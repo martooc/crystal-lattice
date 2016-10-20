@@ -64,7 +64,7 @@ sum(cor >= cor_thr_high)
 ```
 
 Let us plot the unit cells belonging to the crystal, using `rgl`
-```{r, webgl = TRUE}
+```{r}
 p_xs <- p[cor > cor_thr,]
 points3d(p_xs)
 ```
