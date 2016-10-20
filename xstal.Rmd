@@ -5,6 +5,9 @@ output:
   html_notebook: default
   pdf_document: default
 ---
+This notebook visualizes certain characteristics of a real protein crystal reconstructed fully using electron tomography. The physical dimensions of the crystal itself are around 100nm. A crystal, by definition, can be built up by stacking its smallest building block *unit cell* in three dimensions. 
+
+As an input we have a list with center points of the unit cells, a correlation coefficient with each of those unit cells to their average, and 3x3 matrix containing the 3 vectors that represent the sides of the unit cell in 3D
 
 Load the libraries
 ```{r, echo=TRUE, message=FALSE, warning=FALSE}
@@ -15,13 +18,13 @@ library(geometry)
 library(dplyr)
 library(ggplot2)
 library(plotly)
-RUBY = "#A01D26" #I like this color
+RUBY <- "#A01D26" #I like this color
 ```
 
 Read the lattice points and correlations
 ```{r}
-dat = read.table("~/Code/R/crystal_lattice/correlations3_chi1.4_def-3.0_famp0.08.lst")
-names(dat) = c("x", "y", "z", "cor")
+dat <- read.table("~/Code/R/crystal_lattice/correlations3_chi1.4_def-3.0_famp0.08.lst")
+names(dat) <- c("x", "y", "z", "cor")
 ```
 
 Check the dimensions
@@ -30,65 +33,70 @@ dim(dat)
 ```
 Separate the coordinates from the correlation
 ```{r}
-p   = as.matrix(dat[,1:3])
-cor = dat[,4]
+p   <-  as.matrix(dat[,1:3])
+cor  <-  dat[,4]
 ```
 
 Plot the histogram using `ggplot` for plotting and plotly for turning it into an interactive D3.js javascript plot 
 ```{r, plotly=TRUE}
-gr = ggplot(dat, aes(x = cor)) +
-  geom_histogram(bins=128, fill=RUBY, col=RUBY) +
-  #geom_density(col = "gray10", lwd=1) +
+gr <- ggplot(dat, aes(x = cor)) +
+  geom_histogram(aes(y = ..density..), bins=128, fill=RUBY, col=RUBY) +
   geom_vline(xintercept = 0.07, lty = 2, col="black", lwd=1) +
   geom_vline(xintercept = 0.143, lty = 2, col="black", lwd=1) +
-  # geom_hline(yintercept = 0, col="black", lwd=0.5) +
-  annotate("text", 0.077, -30, label = "0.07") +
-  annotate("text", 0.152, -30, label = "0.143") +
+  annotate("text", 0.08, -1, label = "0.07") +
+  annotate("text", 0.155, -1, label = "0.143") +
   xlab("correlation") +
-  theme_bw()
+  theme_minimal()
 gr
 # ggplotly(gr)
 ```
 
-```{r, echo=FALSE}
-cor_thr = 0.07
+Observing the histogram it becomes clear that the distribution of correlations is bimodal and the split between the two modes is at around `0.07`. Out of the total of `r length(cor)` unit cells there are `r sum(cor < 0.07)` to the left of `0.07` and `r sum(cor >= 0.07)` to the right. We consider the left part as background and the right part as the crystal.
+```{r}
+cor_thr <- 0.07
+sum(cor >= cor_thr)
 ```
 
-Observing the histogram it becomes clear that the distribution of correlations is bimodal and the split between the two modes is at around `r cor_thr`. Out of the total of `r length(cor)` unit cells there are `r sum(cor < cor_thr)` to the left of `r cor_thr` and `r sum(cor >= cor_thr)` to the right. We consider the left part as background and the right part as the crystal.
+By experimentation we saw that the highest resolution molecular structure was obtained when setting the correlation threshold very high, to 0.143, and using only these unit cells to calculate the average unit cell. 
+```{r}
+cor_thr_high <- 0.143
+sum(cor >= cor_thr_high)
+```
 
 Let us plot the unit cells belonging to the crystal, using `rgl`
-```{r testgl, webgl = TRUE}
-p_xs = p[cor > cor_thr,]
+```{r, webgl = TRUE}
+p_xs <- p[cor > cor_thr,]
 points3d(p_xs)
 ```
 
-Let's calculate the convex hull, using package `geometry`, and plot that with `rgl`
-```{r, webgl = TRUE}
+Let's calculate the convex hull, using package `geometry`, to approximate the crystal surface and plot that with `rgl`
+```{r}
 ts.surf <- t(convhulln(p_xs))
-hullid = triangles3d(p_xs[ts.surf,1], 
-                       p_xs[ts.surf,2],
-                       p_xs[ts.surf,3],
-                       col="green", alpha=1)
+open3d()
+triangles3d(p_xs[ts.surf,1], 
+            p_xs[ts.surf,2],
+            p_xs[ts.surf,3],
+            col="green", alpha=1)
 ```
 
 That was one way to segment the crystal. Another way could be to just use the unit cells themselves. Let's draw out all of the unitcells, considering that these lattice points represent the middlepoints of unitcells. We also know the unit vectors. Let's first read them in
 
-!!! evaluation currently disabled because it takes a while to render !!!
-```{r, webgl=TRUE, echo=TRUE, eval=FALSE}
+**!!! plotting currently disabled because it takes a while to render !!!**
+```{r, echo=TRUE}
 #Read the 3 vectors as a 3x3 matrix. Columns are vectors
-A = as.matrix(read.table("~/Code/R/crystal_lattice/realfitvectors_lat_new.lst", nrows = 3))
+A <- as.matrix(read.table("~/Code/R/crystal_lattice/realfitvectors_lat_new.lst", nrows = 3))
 
 #Create the default cube with corners at -1 and +1
-c3d = cube3d()
+c3d <- cube3d()
 
 #Divide by 2 to make the sides unit length
-c3d$vb[1:3,] = c3d$vb[1:3,]/2
+c3d$vb[1:3,] <- c3d$vb[1:3,]/2
 
 #Multiply the coordinates by the unit vectors to transform the cubes into general parallelepiped, described by the unit vectors and which represent the unit cells
-c3d$vb[1:3,] = A %*% c3d$vb[1:3,]
+c3d$vb[1:3,] <- A %*% c3d$vb[1:3,]
 
 #Create an empty list to hold the cubes that are about to get drawn
-cubes = vector("list", nrow(p_xs))
+cubes <- vector("list", nrow(p_xs))
 
 #Let's fill the cubes list
 for(i in 1:nrow(p_xs)){
@@ -97,51 +105,49 @@ for(i in 1:nrow(p_xs)){
   cubes[[i]] = newc #Add the translated cube to the list
 }
 
-open3d()
-shapelist3d(cubes, col = RUBY, alpha=0.05)
+# open3d()
+# shapelist3d(cubes, col = RUBY, alpha=1)
 ```
 
-Looks freakin' awesome, if you ask me
+Next let's reduce the opacity of the other unit cells and leave only the highly correlating ones at `alpha = 1`
 
-```{r, webgl=TRUE, echo=TRUE, eval=FALSE}
+```{r, eval=TRUE}
 #Create list of points that are above high threshold
-p_thr = p[cor > 0.143, ]
+p_thr <- p[cor > 0.143, ]
 
 #Create an empty list to hold the cubes that are above threshold
-cubes_thr = vector("list", nrow(p_thr))
+cubes_thr <- vector("list", nrow(p_thr))
 
 #Let's fill the cubes list
 for(i in 1:nrow(p_thr)){
-  newc = c3d #Create new copy of the cube
-  newc$vb[1:3,] = newc$vb[1:3,] + p_thr[i,] #Translate the copy to the next lattice point
-  cubes_thr[[i]] = newc #Add the translated cube to the list
+  newc <- c3d #Create new copy of the cube
+  newc$vb[1:3,] <- newc$vb[1:3,] + p_thr[i,] #Translate the copy to the next lattice point
+  cubes_thr[[i]] <- newc #Add the translated cube to the list
 }
 
-open3d()
-shapelist3d(cubes_thr, col = RUBY, alpha=1)
+# open3d()
+# shapelist3d(cubes,     col = RUBY, alpha=0.05)
+# shapelist3d(cubes_thr, col = RUBY, alpha=1)
 ```
 
 
-```{r, eval=FALSE}
-#vector representing a plane 
-a = A[,1]
+<!-- ```{r, eval=FALSE} -->
+<!-- #vector representing a plane  -->
+<!-- a = A[,1] -->
 
-rgl.triangles(p_xs[ts.surf[,4:5], 1], p_xs[ts.surf[,4:5], 2], p_xs[ts.surf[,4:5], 3])
-plot3d(p_xs[ts.surf,1], p_xs[ts.surf,2], p_xs[ts.surf,3], col="green", alpha=1)
-planes3d(a[1], a[2], a[3], d = d)
+<!-- rgl.triangles(p_xs[ts.surf[,4:5], 1], p_xs[ts.surf[,4:5], 2], p_xs[ts.surf[,4:5], 3]) -->
+<!-- plot3d(p_xs[ts.surf,1], p_xs[ts.surf,2], p_xs[ts.surf,3], col="green", alpha=1) -->
+<!-- planes3d(a[1], a[2], a[3], d = d) -->
 
-mass_center = c(mean(p_xs[ts.surf,1]), mean(p_xs[ts.surf,2]), mean(p_xs[ts.surf,3]))
-points3d(p_xs[ts.surf,1] - mass_center[1], 
-       p_xs[ts.surf,2] - mass_center[2], 
-       p_xs[ts.surf,3] - mass_center[3], col="green", alpha=1)
+<!-- mass_center = c(mean(p_xs[ts.surf,1]), mean(p_xs[ts.surf,2]), mean(p_xs[ts.surf,3])) -->
+<!-- points3d(p_xs[ts.surf,1] - mass_center[1],  -->
+<!--        p_xs[ts.surf,2] - mass_center[2],  -->
+<!--        p_xs[ts.surf,3] - mass_center[3], col="green", alpha=1) -->
 
-a 
-x = p_xs[ts.surf[,1]]
-d = - a %*% x
+<!-- a  -->
+<!-- x = p_xs[ts.surf[,1]] -->
+<!-- d = - a %*% x -->
 
-
-
-      
-sweep(ts_tmp, 1, c(3000, 300, 300))
-```
+<!-- sweep(ts_tmp, 1, c(3000, 300, 300)) -->
+<!-- ``` -->
 
